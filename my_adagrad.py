@@ -98,7 +98,7 @@ class MyAdagrad(Optimizer):
                             return constructor().resize_as_(grad)
                         return constructor(grad_indices, values, size)
                     state['sum'].add_(make_sparse(grad_values.pow(2)))
-                    state['low_prec'].add_(make_sparse(grad_values.pow(2).floor_divide_(multiplier)))
+                    state['low_prec'].add_(make_sparse(torch.floor(grad_values.pow(2)/multiplier)))
                     torch.clamp( state['low_prec'], 0, acc_max - 1)
                     std = (state['low_prec'] * multiplier).sparse_mask(grad) #state['sum'].sparse_mask(grad)
                     std_values = std._values().sqrt_().add_(group['eps'])
