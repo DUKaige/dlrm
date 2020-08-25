@@ -102,7 +102,7 @@ class MyAdagrad(Optimizer):
                     torch.clamp( state['low_prec'], 0, acc_max - 1)
                     std = (state['low_prec'] * multiplier).sparse_mask(grad) #state['sum'].sparse_mask(grad)
                     std_values = std._values().sqrt_().add_(group['eps'])
-                    p.add_(make_sparse(grad_values), alpha=-clr)
+                    #p.add_(make_sparse(grad_values), alpha=-clr)
 
 
                     '''
