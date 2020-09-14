@@ -1031,6 +1031,38 @@ if __name__ == "__main__":
 
                 # print time, loss and accuracy
                 if should_print or should_test:
+                    num_entries_printed = 100000
+                    emb_keys = optimizer.state_dict()['state'].keys()
+                    percentage_buckets = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 100000000.0]
+                    percentage_bucket_counts_acc = [0 for i in percentage_buckets]
+                    percentage_bucket_counts = [0 for i in percentage_buckets]
+                    for param_group in optimizer.param_groups:
+                        for paramg in param_group['params']:
+                            state = optimizer.state[paramg]
+                            if state['sparse'] and len(state['low_prec'].shape) == 2:
+                                for ii in range(min(num_entries_printed, state['low_prec'].shape[0])):
+                                    for jj in range(min(num_entries_printed, state['low_prec'].shape[1])):
+                                        original_acc = state['sum'][ii][jj]
+                                        low_prec_acc = state['low_prec'][ii][jj] * optimizer.multiplier
+                                        percentage_diff = abs(low_prec_acc - original_acc) / original_acc
+                                        for kk in range(len(percentage_buckets)):
+                                            if percentage_diff < percentage_buckets[k]:
+                                                percentage_bucket_counts_acc[kk] += 1
+                                                break
+
+                                for ii in range(min(num_entries_printed, state['low_prec_para'].shape[0])):
+                                    for jj in range(min(num_entries_printed, state['low_prec_para'].shape[1])):
+                                        original_acc = state['low_prec_para'][ii][jj]
+                                        low_prec_acc = paramg[ii][jj] * optimizer.multiplier
+                                        percentage_diff = abs(low_prec_acc - original_acc) / original_acc
+                                        for kk in range(len(percentage_buckets)):
+                                            if percentage_diff < percentage_buckets[k]:
+                                                percentage_bucket_counts[kk] += 1
+                                                break
+                    print("Maomao")
+                    print(percentage_bucket_counts_acc)
+                    print(percentage_bucket_counts)
+
                     gT = 1000.0 * total_time / total_iter if args.print_time else -1
                     total_time = 0
 

@@ -2,7 +2,6 @@ import torch
 from torch.optim.optimizer import Optimizer
 
 
-multiplier = 0.001
 acc_max = 2 ** 8
 
 class MyAdagrad(Optimizer):
@@ -24,7 +23,7 @@ class MyAdagrad(Optimizer):
         Optimization: http://jmlr.org/papers/v12/duchi11a.html
     """
 
-    def __init__(self, params, lr=1e-2, lr_decay=0, weight_decay=0, initial_accumulator_value=0, eps=1e-10):
+    def __init__(self, params, lr=1e-2, lr_decay=0, weight_decay=0, initial_accumulator_value=0.1, eps=1e-10):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= lr_decay:
@@ -39,16 +38,17 @@ class MyAdagrad(Optimizer):
         defaults = dict(lr=lr, lr_decay=lr_decay, eps=eps, weight_decay=weight_decay,
                         initial_accumulator_value=initial_accumulator_value)
         super(MyAdagrad, self).__init__(params, defaults)
-
+        self.multiplier = float(initial_accumulator_value) / acc_max * 4
         for group in self.param_groups:
             for p in group['params']:
                 state = self.state[p]
                 state['step'] = 0
                 state['sum'] = torch.full_like(p, initial_accumulator_value, memory_format=torch.preserve_format)
-                state['low_prec'] = torch.full_like(p, min(acc_max, int(initial_accumulator_value/multiplier)), memory_format=torch.preserve_format)
-                print(state['low_prec'].size())
+                state['low_prec'] = torch.full_like(p, min(acc_max, int(initial_accumulator_value/self.multiplier)), memory_format=torch.preserve_format)
                 state['num_total'] = 0
                 state['num_exceed'] = 0
+                state['sparse'] = False
+                state['low_prec_para'] = torch.clone(p)
 
     def share_memory(self):
         for group in self.param_groups:
@@ -91,6 +91,7 @@ class MyAdagrad(Optimizer):
                     grad_indices = grad._indices()
                     grad_values = grad._values()
                     size = grad.size()
+                    state['sparse'] = True
 
                     def make_sparse(values):
                         constructor = grad.new
@@ -98,24 +99,16 @@ class MyAdagrad(Optimizer):
                             return constructor().resize_as_(grad)
                         return constructor(grad_indices, values, size)
                     state['sum'].add_(make_sparse(grad_values.pow(2)))
-                    state['low_prec'].add_(make_sparse(torch.floor(grad_values.pow(2)/multiplier)))
+                    state['low_prec'].add_(make_sparse(torch.floor(grad_values.pow(2)/self.multiplier)))
                     torch.clamp( state['low_prec'], 0, acc_max - 1)
-                    std = (state['low_prec'] * multiplier).sparse_mask(grad) #state['sum'].sparse_mask(grad)
+
+                    std_low_prec = (state['low_prec'] * self.multiplier).sparse_mask(grad) #state['sum'].sparse_mask(grad)
+                    std_values_low_prec = std_low_prec._values().sqrt_().add_(group['eps'])
+                    state['low_prec_para'].add_(make_sparse(grad_values / std_values_low_prec), alpha=-clr)
+
+                    std = state['sum'].sparse_mask(grad)
                     std_values = std._values().sqrt_().add_(group['eps'])
-                    #p.add_(make_sparse(grad_values), alpha=-clr)
-
-
-                    '''
-                    non_zero = 0
-                    zero = 0
-                    for v in grad_values:
-                        for k in v:
-                            if k > 0.000001 or k < -0.000001:
-                                non_zero += 1
-                            else:
-                                zero += 1
-                    print("zero percentage: " + str(zero/float(zero + non_zero)))
-                    '''
+                    p.add_(make_sparse(grad_values / std_values), alpha=-clr)
                 else:
                     state['sum'].addcmul_(grad, grad, value=1)
                     std = state['sum'].sqrt().add_(group['eps'])
