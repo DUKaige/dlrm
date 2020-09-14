@@ -503,6 +503,9 @@ if __name__ == "__main__":
     import sys
     import argparse
 
+    next_print_mark = 0
+    training_start = time.time()
+
     ### parse arguments ###
     parser = argparse.ArgumentParser(
         description="Train Deep Learning Recommendation Model (DLRM)"
@@ -1029,9 +1032,15 @@ if __name__ == "__main__":
                     and (((j + 1) % args.test_freq == 0) or (j + 1 == nbatches))
                 )
 
-                # print time, loss and accuracy
-                if should_print or should_test:
-                    num_entries_printed = 100000
+                def print_file(content):
+                    with open("maomao.log", "a+") as f:
+                        f.write(content+"\n")
+
+                print_start = time.time()
+                acc_print_interval = 120
+                if print_start - training_start > next_print_mark:
+                    print_file("Printing at " + str(print_start - training_start))
+                    next_print_mark += acc_print_interval
                     emb_keys = optimizer.state_dict()['state'].keys()
                     percentage_buckets = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 100000000.0]
                     percentage_bucket_counts_acc = [0 for i in percentage_buckets]
@@ -1040,29 +1049,23 @@ if __name__ == "__main__":
                         for paramg in param_group['params']:
                             state = optimizer.state[paramg]
                             if state['sparse'] and len(state['low_prec'].shape) == 2:
-                                for ii in range(min(num_entries_printed, state['low_prec'].shape[0])):
-                                    for jj in range(min(num_entries_printed, state['low_prec'].shape[1])):
-                                        original_acc = state['sum'][ii][jj]
-                                        low_prec_acc = state['low_prec'][ii][jj] * optimizer.multiplier
-                                        percentage_diff = abs(low_prec_acc - original_acc) / original_acc
-                                        for kk in range(len(percentage_buckets)):
-                                            if percentage_diff < percentage_buckets[k]:
-                                                percentage_bucket_counts_acc[kk] += 1
-                                                break
+                                percentage_diffs_acc = torch.abs(state['sum'] - state['low_prec'] * optimizer.multiplier)/state['sum']
+                                for kk in range(len(percentage_buckets)):
+                                    bucket_hat = percentage_buckets[kk]
+                                    percentage_bucket_counts_acc[kk] += (percentage_diffs_acc < bucket_hat).sum()
 
-                                for ii in range(min(num_entries_printed, state['low_prec_para'].shape[0])):
-                                    for jj in range(min(num_entries_printed, state['low_prec_para'].shape[1])):
-                                        original_acc = state['low_prec_para'][ii][jj]
-                                        low_prec_acc = paramg[ii][jj] * optimizer.multiplier
-                                        percentage_diff = abs(low_prec_acc - original_acc) / original_acc
-                                        for kk in range(len(percentage_buckets)):
-                                            if percentage_diff < percentage_buckets[k]:
-                                                percentage_bucket_counts[kk] += 1
-                                                break
-                    print("Maomao")
-                    print(percentage_bucket_counts_acc)
-                    print(percentage_bucket_counts)
+                                percentage_diffs = torch.abs(paramg - state['low_prec_para'])/paramg
+                                for kk in range(len(percentage_buckets)):
+                                    bucket_hat = percentage_buckets[kk]
+                                    percentage_bucket_counts[kk] += (percentage_diffs < bucket_hat).sum()
 
+                    print_end = time.time()
+                    print_file("Print takes " + str(print_end - print_start))
+                    print_file(str(percentage_bucket_counts_acc))
+                    print_file(str(percentage_bucket_counts))
+
+                # print time, loss and accuracy
+                if should_print or should_test:
                     gT = 1000.0 * total_time / total_iter if args.print_time else -1
                     total_time = 0
 

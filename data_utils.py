@@ -1009,7 +1009,7 @@ def getCriteoAdData(
                     convertDicts[j][X_cat[i][j]] = 1
 
                 # debug prints
-                '''
+
                 print(
                     "Load %d/%d  Split: %d  Label True: %d  Stored: %d"
                     % (
@@ -1021,7 +1021,6 @@ def getCriteoAdData(
                     ),
                     end="\r",
                 )
-                '''
                 i += 1
 
             # store num_data_in_split samples or extras at the end of file
@@ -1042,9 +1041,7 @@ def getCriteoAdData(
                     X_cat_t=np.transpose(X_cat[0:i, :]),  # transpose of the data
                     y=y[0:i],
                 )
-                '''
                 print("\nSaved " + npzfile + "_{0}.npz!".format(split))
-                '''
         return i
 
     # create all splits (reuse existing files if possible)
