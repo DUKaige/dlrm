@@ -1037,7 +1037,7 @@ if __name__ == "__main__":
                         f.write(content+"\n")
 
                 print_start = time.time()
-                acc_print_interval = 120
+                acc_print_interval = 3600
                 if print_start - training_start > next_print_mark:
                     print_file("Printing at " + str(print_start - training_start))
                     next_print_mark += acc_print_interval
