@@ -23,7 +23,7 @@ class MyAdagrad(Optimizer):
         Optimization: http://jmlr.org/papers/v12/duchi11a.html
     """
 
-    def __init__(self, params, lr=1e-2, lr_decay=0, weight_decay=0, initial_accumulator_value=0.1, eps=1e-10):
+    def __init__(self, params, lr=1e-2, lr_decay=0, weight_decay=0, initial_accumulator_value=0, eps=1e-10):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= lr_decay:
@@ -38,7 +38,7 @@ class MyAdagrad(Optimizer):
         defaults = dict(lr=lr, lr_decay=lr_decay, eps=eps, weight_decay=weight_decay,
                         initial_accumulator_value=initial_accumulator_value)
         super(MyAdagrad, self).__init__(params, defaults)
-        self.multiplier = float(initial_accumulator_value) / acc_max * 4
+        self.multiplier = float(lr) / acc_max * 4
         for group in self.param_groups:
             for p in group['params']:
                 state = self.state[p]
@@ -90,6 +90,17 @@ class MyAdagrad(Optimizer):
                     grad = grad.coalesce()  # the update is non-linear so indices must be unique
                     grad_indices = grad._indices()
                     grad_values = grad._values()
+
+                    #percentage_buckets = [0.0000001,0.0000001,0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10.0]
+                    #percentage_bucket_counts_acc = []
+
+
+                    #for kk in range(len(percentage_buckets)):
+                    #    bucket_hat = percentage_buckets[kk]
+                    #    r = (grad_values < bucket_hat).sum()
+                    #    percentage_bucket_counts_acc.append(r)
+                    #print(percentage_bucket_counts_acc)
+
                     size = grad.size()
                     state['sparse'] = True
 
@@ -98,9 +109,9 @@ class MyAdagrad(Optimizer):
                         if grad_indices.dim() == 0 or values.dim() == 0:
                             return constructor().resize_as_(grad)
                         return constructor(grad_indices, values, size)
-                    state['sum'].add_(make_sparse(grad_values.pow(2)))
+                    state['sum'].add_(make_sparse(grad_vaxlues.pow(2)))
                     state['low_prec'].add_(make_sparse(torch.floor(grad_values.pow(2)/self.multiplier)))
-                    torch.clamp( state['low_prec'], 0, acc_max - 1)
+                    torch.clamp(state['low_prec'], 0, acc_max - 1)
 
                     std_low_prec = (state['low_prec'] * self.multiplier).sparse_mask(grad) #state['sum'].sparse_mask(grad)
                     std_values_low_prec = std_low_prec._values().sqrt_().add_(group['eps'])

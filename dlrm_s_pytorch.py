@@ -93,6 +93,7 @@ import sklearn.metrics
 
 from torch.optim.lr_scheduler import _LRScheduler
 from my_adagrad import MyAdagrad
+from my_sgd import MySGD
 
 exc = getattr(builtins, "IOError", "FileNotFoundError")
 
@@ -825,7 +826,7 @@ if __name__ == "__main__":
 
     if not args.inference_only:
         # specify the optimizer algorithm
-        optimizer = MyAdagrad(dlrm.parameters(), lr=args.learning_rate)
+        optimizer = MySGD(dlrm.parameters(), lr=args.learning_rate, momentum=0.9)
         lr_scheduler = LRPolicyScheduler(optimizer, args.lr_num_warmup_steps, args.lr_decay_start_step,
                                          args.lr_num_decay_steps)
 
@@ -1038,7 +1039,7 @@ if __name__ == "__main__":
 
                 print_start = time.time()
                 acc_print_interval = 3600
-                if print_start - training_start > next_print_mark:
+                if print_start - training_start > next_print_mark or should_print or should_test:
                     print_file("Printing at " + str(print_start - training_start))
                     next_print_mark += acc_print_interval
                     emb_keys = optimizer.state_dict()['state'].keys()
@@ -1049,7 +1050,7 @@ if __name__ == "__main__":
                         for paramg in param_group['params']:
                             state = optimizer.state[paramg]
                             if state['sparse'] and len(state['low_prec'].shape) == 2:
-                                percentage_diffs_acc = torch.abs(state['sum'] - state['low_prec'] * optimizer.multiplier)/state['sum']
+                                percentage_diffs_acc = torch.abs(state['sum'] - state['low_prec'] * optimizer.multiplier) / state['sum']
                                 for kk in range(len(percentage_buckets)):
                                     bucket_hat = percentage_buckets[kk]
                                     percentage_bucket_counts_acc[kk] += (percentage_diffs_acc < bucket_hat).sum()
@@ -1061,8 +1062,8 @@ if __name__ == "__main__":
 
                     print_end = time.time()
                     print_file("Print takes " + str(print_end - print_start))
-                    print_file(str(percentage_bucket_counts_acc))
-                    print_file(str(percentage_bucket_counts))
+                    print_file(str(percentage_bucket_counts_acc[:len(percentage_bucket_counts_acc) - 1]))
+                    print_file(str(percentage_bucket_counts[:len(percentage_bucket_counts) - 1]))
 
                 # print time, loss and accuracy
                 if should_print or should_test:
